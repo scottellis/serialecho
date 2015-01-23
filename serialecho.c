@@ -24,7 +24,7 @@ int done;
 #ifdef __linux__
 #define DEFAULT_PORT "/dev/ttyO0"
 #else
-#define DEFAULT_PORT "/dev/ttyu1"
+#define DEFAULT_PORT "/dev/ttyu2"
 #endif
 
 #define DEFAULT_SPEED 115200 
