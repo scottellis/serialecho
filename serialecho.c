@@ -36,6 +36,7 @@
 void register_sig_handler();
 void sigint_handler(int sig);
 int open_port(const char *device, int speed, struct termios *oldopts);
+int map_speed_to_unix(int speed);
 void run_test(int fd);
 void msleep(int ms);
 
@@ -81,8 +82,8 @@ int main(int argc, char **argv)
 
 		case 's':
 			speed = strtol(optarg, NULL, 0);
-			
-			if (speed < 0 || speed > 3000000) {
+		
+			if (map_speed_to_unix(speed) < 0) {	
 				printf("Invalid speed: %s\n", optarg);
 				usage(argv[0]);
 			}
@@ -168,8 +169,13 @@ void run_test(int fd)
 
 int open_port(const char *device, int speed, struct termios *oldopts)
 {
-	int fd;
+	int fd, unix_speed;
 	struct termios opts;
+
+	unix_speed = map_speed_to_unix(speed);
+
+	if (unix_speed < 0)
+		return -1;
 
 	fd = open(device, O_RDWR | O_NOCTTY | O_NDELAY);
 
@@ -197,13 +203,53 @@ int open_port(const char *device, int speed, struct termios *oldopts)
 	opts.c_cc[VTIME] = 5;
 	opts.c_cc[VMIN] = 0;
 
-	cfsetispeed(&opts, speed);
-	cfsetospeed(&opts, speed);
+	cfsetispeed(&opts, unix_speed);
+	cfsetospeed(&opts, unix_speed);
 
 	tcflush(fd, TCIFLUSH);
 	tcsetattr(fd, TCSANOW, &opts);
 
 	return fd;
+}
+
+int map_speed_to_unix(int speed)
+{
+	int unix_speed;
+
+	switch (speed) {
+	case 50: unix_speed = B50; break;
+	case 75: unix_speed = B75; break;
+	case 110: unix_speed = B110; break;
+	case 134: unix_speed = B134; break;
+	case 150: unix_speed = B150; break;
+	case 300: unix_speed = B300; break;
+	case 600: unix_speed = B600; break;
+	case 1200: unix_speed = B1200; break;
+	case 1800: unix_speed = B1800; break;
+	case 2400: unix_speed = B2400; break;
+	case 4800: unix_speed = B4800; break;
+	case 9600: unix_speed = B9600; break;
+	case 19200: unix_speed = B19200; break;
+	case 38400: unix_speed = B38400; break;
+	case 57600: unix_speed = B57600; break;
+	case 115200: unix_speed = B115200; break;
+	case 230400: unix_speed = B230400; break;
+	case 460800: unix_speed = B460800; break;
+	case 500000: unix_speed = B500000; break;
+	case 576000: unix_speed = B576000; break;
+	case 921600: unix_speed = B921600; break;
+	case 1000000: unix_speed = B1000000; break;
+	case 1152000: unix_speed = B1152000; break;
+	case 1500000: unix_speed = B1500000; break;
+	case 2000000: unix_speed = B2000000; break;
+	case 2500000: unix_speed = B2500000; break;
+	case 3000000: unix_speed = B3000000; break;
+	case 3500000: unix_speed = B3500000; break;
+	case 4000000: unix_speed = B4000000; break;
+	default: unix_speed = -1; break;
+	}
+
+	return unix_speed;
 }
 
 void msleep(int ms)
