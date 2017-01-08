@@ -37,7 +37,7 @@ void register_sig_handler();
 void sigint_handler(int sig);
 int open_port(const char *device, int speed, struct termios *oldopts);
 int map_speed_to_unix(int speed);
-void run_test(int fd);
+void run_test(int fd, unsigned char byte);
 void msleep(int ms);
 
 volatile int done;
@@ -55,6 +55,7 @@ void usage(char *argv_0)
 	printf("\nUsage: %s [-d <device>] [-s <speed>] [-h]\n", argv_0);
 	printf("  -d <device>    Serial device, default is /dev/ttyO4\n");
 	printf("  -s <speed>     Speed, default is 115200\n");
+	printf("  -b <pattern>   Send this byte only, example -b 0xaa\n");
 	printf("  -h             Show this help\n\n");
 	exit(1);
 }
@@ -64,12 +65,14 @@ int main(int argc, char **argv)
 	int opt;
 	char device[64];
 	int speed;
+	unsigned char byte;
 	struct termios oldopts;
   
 	strcpy(device, DEFAULT_PORT);
 	speed = DEFAULT_SPEED;
+	byte = 0;
 
-	while ((opt = getopt(argc, argv, "d:s:h")) != -1) {
+	while ((opt = getopt(argc, argv, "d:s:b:h")) != -1) {
 		switch (opt) {
 		case 'd':
 			if (strlen(optarg) > sizeof(device) - 1) {
@@ -90,6 +93,10 @@ int main(int argc, char **argv)
 
 			break;
 
+		case 'b':
+			byte = strtol(optarg, NULL, 0);
+			break;
+
 		case 'h':
 		default:
 			usage(argv[0]);
@@ -102,7 +109,7 @@ int main(int argc, char **argv)
 	if (fd < 0)
 		exit(1);
 
-	run_test(fd);
+	run_test(fd, byte);
 
 	tcsetattr(fd, TCSANOW, &oldopts);
 
@@ -111,15 +118,21 @@ int main(int argc, char **argv)
 	return 0;
 }
 
-void run_test(int fd)
+void run_test(int fd, unsigned char byte)
 {
 	int len, txlen, pos;
 	int retries;
 	char tx[64];
 	char rx[64];
 
-	strcpy(tx, "ABCDEFJHIJKLMNOPQRSTUVWXYZ1234567890abcdefjhijklmnopqrstuvwxyz");
-	txlen = strlen(tx);
+	if (byte) {
+		memset(tx, byte, sizeof(tx));
+		txlen = sizeof(tx);
+	}
+	else {
+		strcpy(tx, "ABCDEFJHIJKLMNOPQRSTUVWXYZ1234567890abcdefjhijklmnopqrstuvwxyz");
+		txlen = strlen(tx);
+	}
 
 	printf("\n--- ctrl-c to stop ---\n");
 
@@ -133,13 +146,16 @@ void run_test(int fd)
 			break;
 		}
 
-		printf("\nWrote: %s\n", tx);
+		if (byte)
+			printf("Wrote %d bytes of 0x%02X\n", txlen, byte);
+		else
+			printf("\nWrote: %s\n", tx);
 
 		pos = 0;
 		retries = 0;
 
 		while (pos < txlen && !done) { 
-			msleep(75);
+			msleep(500);
 
 			len = read(fd, rx + pos, txlen - pos);
 
@@ -161,8 +177,17 @@ void run_test(int fd)
 		}
 
 		if (!done) {
-			printf("Read : %s\n", rx);
-			msleep(500);
+			if (byte) {
+				if (!memcmp(rx, tx, txlen))
+					printf("Read %d matching bytes\n", txlen);
+				else
+					printf("Read did not match\n");
+			}
+			else {
+				printf("Read : %s\n", rx);
+			}
+
+			msleep(2000);
 		}
 	}
 }
